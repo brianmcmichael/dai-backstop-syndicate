@@ -65,7 +65,7 @@ contract DaiBackstopSyndicate is
 
     // Begin in the "accepting deposits" state.
     _status = Status.ACCEPTING_DEPOSITS;
- 
+
     // Enable "dai-join" to take vatDai in order mint ERC20 Dai.
     _VAT.hope(address(_DAI_JOIN));
 
@@ -82,8 +82,8 @@ contract DaiBackstopSyndicate is
   function enlist(
     uint256 daiAmount
   ) external notWhenDeactivated returns (uint256 backstopTokensMinted) {
-    require(daiAmount > 0, "DaiBackstopSyndicate/enlist: No Dai amount supplied.");  
-      
+    require(daiAmount > 0, "DaiBackstopSyndicate/enlist: No Dai amount supplied.");
+
     require(
       _status == Status.ACCEPTING_DEPOSITS,
       "DaiBackstopSyndicate/enlist: Cannot deposit once the first auction bid has been made."
@@ -112,7 +112,7 @@ contract DaiBackstopSyndicate is
     require(
       backstopTokenAmount > 0, "DaiBackstopSyndicate/defect: No token amount supplied."
     );
-      
+
     // Determine the % ownership. (scaled up by 1e18)
     uint256 shareFloat = (backstopTokenAmount.mul(1e18)).div(totalSupply());
 
@@ -164,7 +164,7 @@ contract DaiBackstopSyndicate is
       require(
         _MKR.transfer(msg.sender, mkrRedeemed),
         "DaiBackstopSyndicate/defect: MKR redemption failed."
-      );      
+      );
     }
   }
 
@@ -198,7 +198,7 @@ contract DaiBackstopSyndicate is
   }
 
   // Anyone can finalize an auction if it's ready
-  function finalizeAuction(uint256 auctionId) external {
+  function finalizeAuction(uint256 auctionId) public {
     require(
       _activeAuctions.contains(auctionId),
       "DaiBackstopSyndicate/finalizeAuction: Auction already finalized"
@@ -221,6 +221,22 @@ contract DaiBackstopSyndicate is
 
     // Emit an event to signal that the auction was finalized.
     emit AuctionFinalized(auctionId);
+  }
+
+  /*
+   * Clear all outbid or finalized auctions from the _activeAuctions set.
+   *   This saves multiple calls to the chain to finalize each auction
+   *   and it keeps the activeAuctions set lightweight.
+   */
+  function flushAuctions() external {
+    uint256[] memory activeAuctions = _activeAuctions.enumerate();
+    address bidder;
+    for (uint256 i = 0; i < activeAuctions.length; i++) {
+      (,, bidder,,) = SimpleFlopper.getCurrentBid(activeAuctions[i]);
+      if (bidder != address(this)) {
+        finalizeAuction(activeAuctions[i]);
+      }
+    }
   }
 
   /// @notice The owner can pause new deposits and auctions. Existing auctions
